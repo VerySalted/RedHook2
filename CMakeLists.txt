@@ -1,9 +1,7 @@
 
-
 cmake_minimum_required(VERSION 3.14)
-project(RedHookII LANGUAGES CXX)
+project(RedHook2 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED 17)
 
 #######################
@@ -22,8 +20,9 @@ add_subdirectory(vendor/minhook)
 #    BUILD     # 
 ################
 
-
-option(BUILD_SHARED "Build shared version" OFF)
+# Currently there's only support for only shared
+# If you want to implement this library statically, you would need to do some changes to the actual lib
+option(BUILD_SHARED "Build shared version" ON)
 
 set(REDHOOK_SOURCES
     source/dllmain.cpp
@@ -56,8 +55,6 @@ set(REDHOOK_SOURCES
     source/util/fiber.cpp
 )
 
-add_definitions("/DRH2_EXPORTS")
-
 if (BUILD_SHARED)
     add_library(${PROJECT_NAME} SHARED ${REDHOOK_SOURCES})
 else()
@@ -73,4 +70,3 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
 	fmt::fmt
 	minhook
 )
-
