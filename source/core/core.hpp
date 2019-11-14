@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../util/fiber.hpp"
-#include "../memory/memory-location.hpp"
-#include "../scripting/script.hpp"
-#include "../types.hpp"
+#include "util/fiber.hpp"
+#include "memory/memory-location.hpp"
+#include "scripting/script.hpp"
+#include "types.hpp"
 
 #include <chrono>
 

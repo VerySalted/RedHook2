@@ -1,24 +1,20 @@
 #include "core.hpp"
 
-#include "../memory/patternscan.hpp"
-#include "../hooking/detour-hook.hpp"
-#include "../hooking/command-hook.hpp"
-#include "../hooking/input-hook.hpp"
-#include "../invoker/invoker.hpp"
-#include "../scripting/script.hpp"
+#include "memory/patternscan.hpp"
+#include "hooking/detour-hook.hpp"
+#include "hooking/command-hook.hpp"
+#include "hooking/input-hook.hpp"
+#include "invoker/invoker.hpp"
+#include "scripting/script.hpp"
 
 #include <memory>
-#include <MinHook/MinHook.h>
+#include <MinHook.h>
 #include <thread>
 #include <chrono>
-#include <fmt/format.h>
-#include <unordered_map>
 #include <filesystem>
 #include <mutex>
 #include <atomic>
 #include <unordered_set>
-
-#include <fstream>
 
 namespace rh2
 {
@@ -52,7 +48,7 @@ namespace rh2
         g_module = module;
 
         // Wait for the game window, otherwise we can't do much
-        auto timeout = high_resolution_clock::now() + 20s;
+        const auto timeout = high_resolution_clock::now() + 20s;
         while (!FindWindowA("sgaWindow", "Red Dead Redemption 2") &&
                high_resolution_clock::now() < timeout)
         {

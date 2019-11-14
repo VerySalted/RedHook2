@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../util/fiber.hpp"
-#include "../core/core.hpp"
+#include "util/fiber.hpp"
+#include "core/core.hpp"
 
 #include <chrono>
 

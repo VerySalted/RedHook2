@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <exception>
 
-#include <MinHook/MinHook.h>
+#include <MinHook.h>
 
 #include "../memory/memory-location.hpp"
 
