@@ -40,12 +40,19 @@ set(REDHOOK_SOURCES
     source/invoker/crossmapping.cpp
     source/invoker/invoker.cpp
 
+	# logger
+	source/logger/file-log.cpp
+	source/logger/helpers.cpp
+	source/logger/log.cpp
+	source/logger/log-mgr.cpp
+
     # memory
     source/memory/helpers.cpp
     source/memory/memory-location.cpp
     source/memory/patternscan.cpp
 
     # rage
+	source/rage/scrProgram.cpp
     source/rage/scrThread.cpp
 
     # scripting
