@@ -6,6 +6,8 @@
 #include "hooking/input-hook.hpp"
 #include "invoker/invoker.hpp"
 #include "scripting/script.hpp"
+#include "logger/log-mgr.hpp"
+#include "logs.hpp"
 
 #include <memory>
 #include <MinHook.h>
@@ -24,6 +26,7 @@ namespace rh2
     MemoryLocation g_PatchVectorResults;
     MemoryLocation g_s_CommandHash;
     MemoryLocation g_rage__scrThread__GetCmdFromHash;
+    MemoryLocation g_rage__scrProgram__sm_Globals;
 
     std::unique_ptr<hooking::CommandHook> g_waitHook;
 
@@ -38,6 +41,7 @@ namespace rh2
     bool InitializeHooks();
     bool InitializeCommandHooks();
     void LoadMods();
+    void CreateLogs();
 
     bool Init(hMod module)
     {
@@ -46,6 +50,12 @@ namespace rh2
         using namespace std::chrono_literals;
 
         g_module = module;
+
+        CreateLogs();
+
+        logs::g_hLog->log("Initializing RedHook2");
+
+        logs::g_hLog->log("Waiting for game window");
 
         // Wait for the game window, otherwise we can't do much
         const auto timeout = high_resolution_clock::now() + 20s;
@@ -59,8 +69,12 @@ namespace rh2
         // Check if waiting for the window timed out
         if (high_resolution_clock::now() >= timeout)
         {
+            logs::g_hLog->fatal("Timed out");
             return false;
         }
+        logs::g_hLog->log("Game window found");
+
+        logs::g_hLog->log("Searching patterns");
 
         // Find sigs
         MemoryLocation loc;
@@ -80,32 +94,53 @@ namespace rh2
         else
             return false;
 
+        if (loc = "4C 8D 05 ? ? ? ? 4D 8B 08 4D 85 C9 74 11")
+            rage::scrProgram::sm_Globals = g_rage__scrProgram__sm_Globals = loc.get_lea();
+        else
+            false;
+
+        logs::g_hLog->log("Patterns found");
+
+        logs::g_hLog->log("Initializing Minhook");
         auto st = MH_Initialize();
         if (st != MH_OK)
         {
+            logs::g_hLog->log("Minhook failed to initialize {} ({})", MH_StatusToString(st), st);
             return false;
         }
+        logs::g_hLog->log("Minhook initialized");
 
+        logs::g_hLog->log("Initializing hooks");
         if (!InitializeHooks())
         {
             return false;
         }
+        logs::g_hLog->log("Hooks initialized");
 
+        logs::g_hLog->log("Waiting for natives");
         while (!(*s_CommandHash))
         {
             std::this_thread::sleep_for(100ms);
         }
+        logs::g_hLog->log("Natives loaded");
 
+        logs::g_hLog->log("Initializing input hook");
         if (!hooking::input::InitializeHook())
         {
             return false;
         }
+        logs::g_hLog->log("Input hook initialized");
 
+        logs::g_hLog->log("Initializing native hooks");
         if (!InitializeCommandHooks())
         {
             return false;
         }
+        logs::g_hLog->log("Natives initialized");
 
+        logs::g_hLog->log("RedHook2 initialized");
+
+        logs::g_hLog->log("Loading mods");
         std::thread thrd(LoadMods);
         thrd.detach();
 
@@ -120,32 +155,51 @@ namespace rh2
             return;
         g_unloading = true;
 
-        for (auto mod : g_modules)
+        logs::g_hLog->log("Unloaded {} mods", g_modules.size());
+        while (!g_modules.empty())
         {
-            FreeLibrary(static_cast<HMODULE>(mod));
+            FreeLibrary(static_cast<HMODULE>(*g_modules.begin()));
         }
+        logs::g_hLog->log("Scripts unloaded");
 
+        logs::g_hLog->log("Removing input hook");
         if (!hooking::input::RemoveHook())
         {
+            logs::g_hLog->fatal("Failed to remove input hook");
             return;
         }
+        logs::g_hLog->log("Input hook removed");
 
+        logs::g_hLog->log("Removing hooks");
         if (!hooking::DisableHooks())
         {
+            logs::g_hLog->fatal("Failed to disable hooks");
             return;
         }
-
+        logs::g_hLog->log("Hooks disabled");
         if (!hooking::RemoveHooks())
         {
+            logs::g_hLog->fatal("Failed to remove hooks");
             return;
         }
+        logs::g_hLog->log("Hooks removed");
 
-        if (MH_Uninitialize() != MH_OK)
+        logs::g_hLog->log("Uninitializing Minhook");
+        auto st = MH_Uninitialize();
+        if (st != MH_OK)
         {
+            logs::g_hLog->fatal("Failed to unitialized Minhook {} ({})", MH_StatusToString(st), st);
             return;
         }
+        logs::g_hLog->log("Minhook uninitialized");
 
+        logs::g_hLog->log("Restoring memory");
         MemoryLocation::RestoreAllModifiedBytes();
+        logs::g_hLog->log("Memory restored");
+
+        logs::g_hLog->log("RedHook2 unloaded");
+
+        logging::LogMgr::DeleteAllLogs();
 
         FreeLibraryAndExitThread(static_cast<HMODULE>(g_module), 0);
     }
@@ -193,6 +247,14 @@ namespace rh2
             true;                   //
     }
 
+    void CreateLogs()
+    {
+        std::filesystem::create_directories("RedHook2/logs");
+
+        logs::g_hLog = logging::LogMgr::CreateLog<logging::GenericFileLogger>(
+            "hook_log", "RedHook2/logs/hook.log");
+    }
+
     Fiber GetGameFiber()
     {
         return g_gameFiber;
@@ -216,16 +278,19 @@ namespace rh2
     void ScriptRegister(hMod module, const Script& script)
     {
         std::lock_guard _(g_scriptMutex);
-        g_modules.insert(module);
         g_scripts.push_back(std::pair(module, script));
+        logs::g_hLog->log("Script registred by {}", module);
     }
 
     void ScriptUnregister(hMod module)
     {
+        logs::g_hLog->log("Unloading module {}", module);
+        i32 numScripts = 0;
         for (auto it = g_scripts.begin(); it != g_scripts.end(); ++it)
         {
             if (it->first == module)
             {
+                ++numScripts;
                 if (it = g_scripts.erase(it); it == g_scripts.end())
                 {
                     break;
@@ -234,6 +299,7 @@ namespace rh2
         }
 
         g_modules.erase(module);
+        logs::g_hLog->log("Module {} unloaded with {} scripts", module, numScripts);
         FreeLibraryAndExitThread(static_cast<HMODULE>(module), 0);
     }
 
@@ -253,8 +319,20 @@ namespace rh2
         {
             if (it->path().extension() == ".asi")
             {
-                LoadLibraryW(it->path().wstring().c_str());
+                auto  name   = it->path().filename().string();
+                void* module = LoadLibraryW(it->path().wstring().c_str());
+                if (module)
+                {
+                    g_modules.insert(module);
+                    logs::g_hLog->log("Loaded {} (handle: {})", name, module);
+                }
+                else
+                {
+                    logs::g_hLog->log("Failed to load {} ({:X})", name, GetLastError());
+                }
             }
         }
+
+        logs::g_hLog->log("Mods loaded");
     }
 } // namespace rh2
