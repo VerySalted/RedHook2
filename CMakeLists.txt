@@ -30,6 +30,7 @@ set(REDHOOK_SOURCES
     
 	# core
 	source/core/core.cpp
+	source/core/logs.cpp
 
     # hooking
     source/hooking/command-hook.cpp
